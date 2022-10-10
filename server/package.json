@@ -1,0 +1,19 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js"
+  },
+  "dependencies": {
+    "@colyseus/command": "^0.1.6",
+    "@colyseus/monitor": "^0.12.2",
+    "colyseus": "^0.14.23",
+    "cors": "^2.8.5",
+    "express": "^4.16.4"
+  },
+  "devDependencies": {},
+  "author": "",
+  "license": "ISC"
+}
