@@ -37,23 +37,128 @@ export default class MainScene extends Phaser.Scene {
     this.load.image("logo", "./assets/logo.png");
     this.load.image("healthBarContainer", "./assets/healthBarContainer.png");
     this.load.image("healthBar", "./assets/healthBar.png");
+
+    this.load.atlas(
+      "char1_walk",
+      "./assets/Char03/Walk/char1_walk.png",
+      "./assets/Char03/Walk/char1_walk.json"
+    );
+    this.load.atlas(
+      "char1_hit",
+      "./assets/Char03/Hit/char1_hit.png",
+      "./assets/Char03/Hit/char1_hit.json"
+    );
+    this.load.atlas(
+      "char1_idle",
+      "./assets/Char03/Idle/char1_idle.png",
+      "./assets/Char03/Idle/char1_idle.json"
+    );
+    this.load.atlas(
+      "char1_hurt",
+      "./assets/Char03/GetHit/char1_hurt.png",
+      "./assets/Char03/GetHit/char1_hurt.json"
+    );
   }
 
   async create() {
+    const animations = [
+      {
+        key: "char1_walk",
+        frames: this.anims.generateFrameNames("char1_walk", {
+          prefix: "skeleton-Walk_",
+          start: 0,
+          end: this.textures.list.char1_walk.frameTotal - 2,
+        }),
+        frameRate: 20,
+      },
+      {
+        key: "char1_idle",
+        frames: this.anims.generateFrameNames("char1_idle", {
+          prefix: "skeleton-Idle_",
+          start: 0,
+          end: this.textures.list.char1_idle.frameTotal - 2,
+        }),
+        frameRate: 20,
+        repeat: -1,
+      },
+      {
+        key: "char1_hit",
+        frames: this.anims.generateFrameNames("char1_hit", {
+          prefix: "skeleton-Hit_",
+          start: 0,
+          end: 21,
+        }),
+        frameRate: 30,
+      },
+      {
+        key: "char1_hurt",
+        frames: this.anims.generateFrameNames("char1_hurt", {
+          prefix: "skeleton-GetHit_",
+          start: 0,
+          end: 13,
+        }),
+        frameRate: 30,
+      },
+    ];
+    const attackAnimDuration = 22 * 30;
+
+    animations.forEach((anim) => this.anims.create(anim));
+
     this.cursorKeys = this.input.keyboard.createCursorKeys();
     this.debugFPS = this.add.text(4, 4, "", { color: "#ff0000" });
 
     await this.connect();
 
     this.room.state.players.onAdd = (player, sessionId) => {
-      const entity = this.add.image(player.x, player.y, "logo").setScale(0.2);
+      const entity = this.add
+        .sprite(player.x, player.y, "char1_idle")
+        .setOrigin(0)
+        .play("char1_idle")
+        .setScale(0.3);
       entity.health = 100;
-      entity.healthbar = new HealthBar(this, entity.x, 100, entity.health);
+      entity.canMove = true;
+      entity.hasAttacked = false;
+      entity.isDuringAttack = false;
+      entity.pastQueue = [];
+      entity.update = () => {
+        entity.healthbar.setPosition(entity.x, entity.y - 50);
+      };
+      entity.on(
+        "animationcomplete",
+        function (anim, frame) {
+          this.emit("animationcomplete_" + anim.key, anim, frame);
+        },
+        entity
+      );
+
+      entity.on("animationcomplete_char1_hit", function () {
+        entity.isPlayingHitAnimation = false;
+        // entity.hasAttacked = true;
+      });
+      entity.on("animationcomplete_char1_hurt", function () {
+        entity.canMove = true;
+      });
+      entity.healthbar = new HealthBar(
+        this,
+        entity.x,
+        entity.y - 100,
+        entity.health
+      );
+
+      entity.attackHitbox = {
+        x: 0,
+        y: 0,
+        width: 50,
+        height: entity.displayHeight,
+        flipX: entity.flipX,
+      };
 
       entity.hurt = () => {
         entity.health -= 20;
         entity.healthbar.health = entity.health;
         entity.healthbar.update();
+        entity.play("char1_hurt", true);
+        entity.canMove = false;
       };
 
       this.playerEntities[sessionId] = entity;
@@ -62,26 +167,51 @@ export default class MainScene extends Phaser.Scene {
       if (sessionId === this.room.sessionId) {
         this.currentPlayer = entity;
 
-        this.localRef = this.add.rectangle(0, 0, entity.width, entity.height);
+        this.localRef = this.add
+          .rectangle(0, 0, entity.displayWidth, entity.displayHeight)
+          .setOrigin(0);
         this.localRef.setStrokeStyle(1, 0x00ff00);
 
-        this.remoteRef = this.add.rectangle(0, 0, entity.width, entity.height);
+        this.remoteRef = this.add
+          .rectangle(0, 0, entity.displayWidth, entity.displayHeight)
+          .setOrigin(0);
         this.remoteRef.setStrokeStyle(1, 0xff0000);
 
         player.onChange = () => {
           this.remoteRef.x = player.x;
           this.remoteRef.y = player.y;
+          const pastInput = entity.pastQueue.find(
+            (pastInput) => pastInput.tick === player.tick
+          );
+
+          if (
+            pastInput &&
+            player.canMove &&
+            (pastInput.x !== player.x || pastInput.y !== player.y)
+          ) {
+            entity.x = player.x;
+            entity.y = player.y;
+            // entity.x = Phaser.Math.Linear(entity.x, serverX, 0.2);
+            //entity.y = Phaser.Math.Linear(entity.y, serverY, 0.2);
+          }
+
           if (player.health < entity.health) {
             //entity.health = player.health;
             entity.hurt();
+            // entity.play("char1_idle", true);
           }
         };
       } else {
         // listening for server updates
+        entity.localRef = this.add
+          .rectangle(0, 0, entity.displayWidth, entity.displayHeight)
+          .setOrigin(0);
+        entity.localRef.setStrokeStyle(1, 0x00ff00);
         player.onChange = () => {
           //
           // we're going to LERP the positions during the render loop.
           //
+          entity.isAttacking = player.isAttacking;
           entity.setData("serverX", player.x);
           entity.setData("serverY", player.y);
         };
@@ -107,7 +237,9 @@ export default class MainScene extends Phaser.Scene {
   }
 
   attack() {
-    this.hasAttacked = true;
+    this.currentPlayer.isPlayingHitAnimation = true;
+    this.currentPlayer.hasAttacked = true;
+    this.currentPlayer.isDuringAttack = true;
   }
 
   async connect() {
@@ -117,7 +249,8 @@ export default class MainScene extends Phaser.Scene {
       .setStyle({ color: "#ff0000" })
       .setPadding(4);
 
-    const client = new Client(BACKEND_URL);
+    //const client = new Client(BACKEND_URL);
+    const client = new Client("ws://10.7.1.246:8080");
 
     try {
       this.room = await client.joinOrCreate("MainRoom", {});
@@ -138,6 +271,9 @@ export default class MainScene extends Phaser.Scene {
       return;
     }
 
+    for (const entity in this.playerEntities) {
+      this.playerEntities[entity].update();
+    }
     this.elapsedTime += delta;
     while (this.elapsedTime >= this.fixedTimeStep) {
       this.elapsedTime -= this.fixedTimeStep;
@@ -160,20 +296,61 @@ export default class MainScene extends Phaser.Scene {
     this.inputPayload.up = this.cursorKeys.up.isDown;
     this.inputPayload.down = this.cursorKeys.down.isDown;
     this.inputPayload.tick = this.currentTick;
-    this.inputPayload.attack = this.hasAttacked;
+    this.inputPayload.attack = this.currentPlayer.hasAttacked; // or this.cursorKeys.attackKey.isDown
+    this.inputPayload.shoot = this.currentPlayer;
+    this.timestamp = Date.now();
 
+    if (this.currentPlayer.isPlayingHitAnimation) {
+      this.inputPayload.left = false;
+      this.inputPayload.right = false;
+      this.inputPayload.up = false;
+      this.inputPayload.down = false;
+    }
     this.room.send(0, this.inputPayload);
 
-    if (this.inputPayload.left) {
-      this.currentPlayer.x -= velocity;
-    } else if (this.inputPayload.right) {
-      this.currentPlayer.x += velocity;
-    }
+    let moved = false;
+    if (this.currentPlayer.canMove) {
+      if (!this.currentPlayer.isPlayingHitAnimation) {
+        if (this.inputPayload.left) {
+          this.currentPlayer.x -= velocity;
+          this.currentPlayer.setFlipX(true);
+          this.currentPlayer.play("char1_walk", true);
+          moved = true;
+        } else if (this.inputPayload.right) {
+          this.currentPlayer.x += velocity;
+          this.currentPlayer.setFlipX(false);
+          this.currentPlayer.play("char1_walk", true);
+          moved = true;
+        }
 
-    if (this.inputPayload.up) {
-      this.currentPlayer.y -= velocity;
-    } else if (this.inputPayload.down) {
-      this.currentPlayer.y += velocity;
+        if (this.inputPayload.up) {
+          this.currentPlayer.y -= velocity;
+          this.currentPlayer.play("char1_walk", true);
+          moved = true;
+        } else if (this.inputPayload.down) {
+          this.currentPlayer.y += velocity;
+          this.currentPlayer.play("char1_walk", true);
+          moved = true;
+        }
+
+        if (!moved && !this.currentPlayer.isPlayingHitAnimation) {
+          this.currentPlayer.play("char1_idle", true);
+        }
+      }
+      if (this.currentPlayer.hasAttacked) {
+        this.currentPlayer.play("char1_hit");
+        this.time.delayedCall(22 * 30, () => {
+          this.currentPlayer.checkIfHitEnemies = true;
+          this.currentPlayer.canMove = true;
+          this.currentPlayer.isDuringAttack = false;
+        });
+      }
+
+      this.currentPlayer.pastQueue.push({
+        x: this.currentPlayer.x,
+        y: this.currentPlayer.y,
+        tick: this.currentTick,
+      });
     }
 
     this.localRef.x = this.currentPlayer.x;
@@ -189,14 +366,93 @@ export default class MainScene extends Phaser.Scene {
       const entity = this.playerEntities[sessionId];
       const { serverX, serverY } = entity.data.values;
 
+      let moved = false;
+      if (entity.x < serverX) {
+        entity.setFlipX(false);
+        !entity.isPlayingHitAnimation &&
+          entity.canMove &&
+          entity.play("char1_walk", true);
+        moved = true;
+      } else if (entity.x > serverX) {
+        entity.setFlipX(true);
+        !entity.isPlayingHitAnimation &&
+          entity.canMove &&
+          entity.play("char1_walk", true);
+        moved = true;
+      }
+
+      if (entity.y != serverY) {
+        !entity.isPlayingHitAnimation &&
+          entity.canMove &&
+          entity.play("char1_walk", true);
+        moved = true;
+      }
+
+      if (!moved) {
+        !entity.isPlayingHitAnimation &&
+          entity.canMove &&
+          entity.play("char1_idle", true);
+      }
+
       entity.x = Phaser.Math.Linear(entity.x, serverX, 0.2);
       entity.y = Phaser.Math.Linear(entity.y, serverY, 0.2);
 
-      if (this.hasAttacked) {
-        entity.hurt();
+      if (entity.isAttacking) {
+        entity.play("char1_hit", true);
+        entity.isPlayingHitAnimation = true;
+      }
+
+      entity.localRef && entity.localRef.setPosition(entity.x, entity.y);
+      if (this.currentPlayer.checkIfHitEnemies) {
+        this.currentPlayer.checkIfHitEnemies = false;
+        this.attackHitbox && this.attackHitbox.destroy();
+        // this.currentPlayer.attackHitbox.flipX = this.currentPlayer.flipX;
+        this.currentPlayer.attackHitbox.x = this.currentPlayer.x;
+        this.currentPlayer.attackHitbox.y = this.currentPlayer.y;
+
+        // this.currentPlayer.attackHitbox.flipX
+        //   ? (this.currentPlayer.attackHitbox.x -= 20)
+        //   : (this.currentPlayer.attackHitbox.x += 20);
+        if (!this.currentPlayer.flipX) {
+          this.currentPlayer.attackHitbox.x +=
+            this.currentPlayer.displayWidth -
+            this.currentPlayer.attackHitbox.width -
+            70;
+        }
+
+        this.attackHitbox = this.add
+          .rectangle(
+            this.currentPlayer.attackHitbox.x,
+            this.currentPlayer.attackHitbox.y,
+            this.currentPlayer.attackHitbox.width,
+            this.currentPlayer.attackHitbox.height
+          )
+          .setStrokeStyle(1, 0x00ff00)
+          .setOrigin(0);
+
+        this.currentPlayer.attackHitbox.displayWidth =
+          this.currentPlayer.attackHitbox.width;
+        this.currentPlayer.attackHitbox.displayHeight =
+          this.currentPlayer.attackHitbox.height;
+
+        if (this.isColliding(this.currentPlayer.attackHitbox, entity)) {
+          console.log("collide");
+          entity.hurt();
+        }
       }
     }
 
-    this.hasAttacked = false;
+    this.currentPlayer.hasAttacked = false;
+  }
+
+  isColliding(obj1, obj2) {
+    if (
+      obj1.x < obj2.x + obj2.displayWidth &&
+      obj1.x + obj1.displayWidth > obj2.x &&
+      obj1.y < obj2.y + obj2.displayHeight &&
+      obj1.displayHeight + obj1.y > obj2.y
+    ) {
+      return true;
+    }
   }
 }

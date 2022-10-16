@@ -7,7 +7,7 @@ const MainRoom = require("./src/rooms/mainRoom").default;
 //const { SERVER_PORT } = require("../shared/config");
 
 const port = 8080;
-const host = "0.0.0.0";
+const host = "10.7.1.246";
 const app = express();
 
 app.use(cors());

@@ -18,6 +18,11 @@ class HealthBar {
       .setScale(2);
   }
 
+  setPosition(x, y) {
+    this.healthBarContainer.setPosition(x - 35, y - 25);
+    this.energybar.setPosition(x - 7, y - 15);
+  }
+
   update() {
     this.energybar.displayWidth = this.getHealBarWidth();
   }

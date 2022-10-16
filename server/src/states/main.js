@@ -19,6 +19,9 @@ class Player extends Schema {
     this.health = 100;
     this.inputQueue = [];
     this.actionQueue = [];
+    this.pastQueue = [];
+    this.isAttacking = false;
+    this.canMove = true;
   }
 
   hurt() {
@@ -32,6 +35,8 @@ schema.defineTypes(Player, {
   y: "number",
   health: "number",
   tick: "number",
+  isAttacking: "boolean",
+  canMove: "boolean",
 });
 
 class MainRoomState extends Schema {

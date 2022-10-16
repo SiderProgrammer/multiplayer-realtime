@@ -19,4 +19,14 @@ const config = {
   scene: [MainScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+// game.loop.destroy();
+
+// // create new loop
+// game.loop = new Phaser.Core.TimeStep(game, {
+//   target: 20,
+//   forceSetTimeOut: true,
+//   smoothStep: false,
+// });
+// game.loop.start(game.step.bind(game));
+// // start new loop
