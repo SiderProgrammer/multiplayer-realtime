@@ -59,6 +59,13 @@ export default class MainScene extends Phaser.Scene {
       "./assets/Char03/GetHit/char1_hurt.png",
       "./assets/Char03/GetHit/char1_hurt.json"
     );
+
+    for (let i = 0; i <= 25; i++) {
+      this.load.image(
+        `char1_hit2 ${i}`,
+        `./assets/Char03/Hit2/skeleton-Hit2_${i}.png`
+      );
+    }
   }
 
   createEntity(x, y) {
@@ -73,6 +80,11 @@ export default class MainScene extends Phaser.Scene {
     entity.isDuringAttack = false;
     entity.isAlive = true;
     entity.pastQueue = [];
+    entity.hitCombo = {
+      count: 0,
+      timestamp: Date.now(),
+    };
+
     entity.update = () => {
       entity.healthbar.setPosition(entity.x, entity.y - 50);
     };
@@ -88,8 +100,12 @@ export default class MainScene extends Phaser.Scene {
       entity.isPlayingHitAnimation = false;
       // entity.hasAttacked = true;
     });
+    entity.on("animationcomplete_char1_hit2", function () {
+      entity.isPlayingHitAnimation = false;
+      // entity.hasAttacked = true;
+    });
     entity.on("animationcomplete_char1_hurt", function () {
-      entity.canMove = true;
+      //entity.canMove = true;
     });
     entity.healthbar = new HealthBar(
       this,
@@ -111,9 +127,17 @@ export default class MainScene extends Phaser.Scene {
       entity.health -= 20;
       entity.healthbar.health = entity.health;
       entity.healthbar.update();
-      entity.play("char1_hurt", true);
+
+      if (!entity.isDuringAttack) {
+        entity.play("char1_hurt", true);
+      }
+
       entity.canMove = false;
       entity.isPlayingHitAnimation = false;
+      this.time.delayedCall(14 * 30, () => {
+        entity.canMove = true;
+      });
+
       if (entity.health <= 0) {
         entity.isAlive = false;
         entity.destroy();
@@ -165,6 +189,16 @@ export default class MainScene extends Phaser.Scene {
     const attackAnimDuration = 22 * 30;
 
     animations.forEach((anim) => this.anims.create(anim));
+
+    const frames = [];
+    for (let i = 0; i <= 25; i++) {
+      frames.push({ key: `char1_hit2 ${i}`, frame: null });
+    }
+    this.anims.create({
+      key: `char1_hit2`,
+      frames,
+      frameRate: 30,
+    });
 
     this.cursorKeys = this.input.keyboard.createCursorKeys();
     this.debugFPS = this.add.text(4, 4, "", { color: "#ff0000" });
@@ -296,7 +330,6 @@ export default class MainScene extends Phaser.Scene {
   }
 
   attack() {
-    this.currentPlayer.isPlayingHitAnimation = true;
     this.currentPlayer.hasAttacked = true;
     this.currentPlayer.isDuringAttack = true;
   }
@@ -402,8 +435,26 @@ export default class MainScene extends Phaser.Scene {
           this.currentPlayer.play("char1_idle", true);
         }
       }
-      if (this.currentPlayer.hasAttacked) {
-        this.currentPlayer.play("char1_hit");
+
+      if (
+        this.currentPlayer.hasAttacked &&
+        !this.currentPlayer.isPlayingHitAnimation
+      ) {
+        this.currentPlayer.isPlayingHitAnimation = true;
+        console.log("works!");
+        if (Date.now() - this.currentPlayer.hitCombo.timestamp < 30 * 30) {
+          this.currentPlayer.hitCombo.count++;
+          this.currentPlayer.hitCombo.timestamp = Date.now();
+
+          if (this.currentPlayer.hitCombo.count == 2) {
+            this.currentPlayer.play("char1_hit2", true);
+          }
+        } else {
+          this.currentPlayer.hitCombo.count = 0;
+          this.currentPlayer.hitCombo.timestamp = Date.now();
+          this.currentPlayer.play("char1_hit", true);
+        }
+
         this.time.delayedCall(22 * 30, () => {
           this.currentPlayer.checkIfHitEnemies = true;
           //this.currentPlayer.canMove = true;
@@ -417,6 +468,8 @@ export default class MainScene extends Phaser.Scene {
         tick: this.currentTick,
       });
     }
+
+    this.currentPlayer.hasAttacked = false;
 
     this.localRef.x = this.currentPlayer.x;
     this.localRef.y = this.currentPlayer.y;
@@ -432,7 +485,7 @@ export default class MainScene extends Phaser.Scene {
       this.handleEntityUpdate(entity);
     }
 
-    this.currentPlayer.hasAttacked = false;
+    //this.currentPlayer.hasAttacked = false;
 
     for (let id in this.monsterEntities) {
       const entity = this.monsterEntities[id];

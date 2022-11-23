@@ -194,7 +194,7 @@ exports.default = class MainRoom extends Room {
           enemy.hurt();
           enemy.canMove = false;
           //enemy.isStunned = true;
-          if (enemy.hitTimeout) clearTimeout(enemy.hitTimeout);
+          // if (enemy.hitTimeout) clearTimeout(enemy.hitTimeout);
           setTimeout(() => {
             enemy.canMove = true;
             enemy.isAttacking = false;
